@@ -1,0 +1,267 @@
+---
+title: "Dashboard de Vendas de Carros"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    theme: 
+      version: 4
+      bg: "#FDF7F7" 
+      fg: "#101010"
+      primary: "pink"
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(shiny)
+library(plotly)
+library(DT)
+library(lubridate)
+library(scales)
+
+# Carregar e preparar dados
+dados = read_csv('bases/CarData.csv') %>% 
+  rename(Price = `Price ($)`)%>%
+  mutate(Date = mdy(Date))
+
+dados_mes = dados %>%
+  mutate(Mes_Ano = floor_date(Date, "month")) %>%
+  group_by(Mes_Ano) %>%
+  summarise(
+    Total = sum(Price, na.rm = TRUE),
+    Media = mean(Price, na.rm = TRUE),
+    Vendas = n()
+  )
+
+```
+
+# VISÃO GERAL
+
+## Métricas Principais
+
+```{r}
+# Cálculos para as métricas
+total_vendas = nrow(dados)
+preco_medio = mean(dados$Price, na.rm = TRUE)
+marca_lider = dados %>% 
+  count(Company) %>% 
+  arrange(desc(n)) %>% 
+  slice(1) %>% 
+  pull(Company)
+```
+
+### Total de Vendas
+
+```{r}
+valueBox(total_vendas, 
+         icon = "ion-android-cart",
+         color = "primary")
+```
+
+### Preço Médio
+
+```{r}
+valueBox(paste0("$", round(preco_medio, 2)),
+         icon = "fa-solid fa-dollar-sign",
+         color = "darkgreen")
+```
+
+### Marca Líder
+
+```{r}
+valueBox(marca_lider,
+         icon = "fa-crown",
+         color = "#E33B19")
+```
+
+### Desempenho do último mês vs Meta
+
+```{r}
+ultimo_mes = dados_mes[which.max(dados_mes$Mes_Ano), ]
+gauge(ultimo_mes$Vendas, min = 0, max = 2500, 
+      sectors = gaugeSectors(success = c(1300, 2500), 
+                            warning = c(750, 1300),
+                            danger = c(0, 750)))
+```
+
+## Análise Temporal{data-width = 450}
+
+### Vendas por Mês
+
+```{r}
+#| fig-height: 5
+
+
+ggplot(dados_mes, aes(x = Mes_Ano, y = Vendas)) +
+  geom_line(color = "#2E86AB", size = 1.5) +
+  geom_point(color = "#2E86AB", size = 2) +
+  labs(x = "Mês", y = "Número de Vendas") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text = element_text(size = 14),
+        axis.title = element_text(size = 14))
+
+```
+
+## Top Marcas e Modelos{data-width = 350}
+
+### Top 10 Marcas
+
+```{r}
+#| fig-height: 5
+
+top_marcas = dados %>%
+  count(Company) %>%
+  arrange(desc(n)) %>%
+  head(10)
+
+ggplot(top_marcas, aes(x = reorder(Company, n), y = n)) +
+  geom_col(fill = "#A23B72") +
+  coord_flip() +
+  labs( x = "Marca", y = "Vendas") +
+  theme_minimal()+
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 14))
+```
+
+### Distribuição de Preços
+
+```{r}
+#| fig-height: 5
+
+ggplot(dados, aes(x = Price)) +
+  geom_histogram(fill = "#F18F01", bins = 30, alpha = 0.8) +
+  labs(x = "Preço ($)", y = "Frequência") +
+  scale_x_continuous(labels = dollar) +
+  theme_minimal()+
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 14))
+```
+
+# ANÁLISE DE CLIENTES {data-orientation="rows"}
+
+## Filtros {.sidebar}
+
+```{r}
+selectInput("regiao_cliente", "Região:",
+            choices = c("Todas", unique(dados$Dealer_Region)))
+
+sliderInput("renda_cliente", "Faixa de Renda Anual:",
+            min = min(dados$`Annual Income`, na.rm = TRUE),
+            max = max(dados$`Annual Income`, na.rm = TRUE),
+            value = c(0, max(dados$`Annual Income`, na.rm = TRUE))) # valores selecionados inicialmente
+
+
+selectInput("marca_cliente", "Marca:",
+            choices = c("Todas", unique(dados$Company)))
+```
+
+## Perfil Demográfico
+
+### Distribuição por Gênero
+
+```{r}
+#| fig-height: 5
+
+renderPlotly({
+  dados_filtrados = dados
+    
+  if(input$regiao_cliente != "Todas") {
+    dados_filtrados = dados_filtrados %>% 
+      filter(Dealer_Region == input$regiao_cliente)
+  }
+
+  dados_filtrados = dados_filtrados %>%
+    filter(`Annual Income` >= input$renda_cliente[1] & 
+           `Annual Income` <= input$renda_cliente[2])
+  
+  if(input$marca_cliente != "Todas") {
+    dados_filtrados = dados_filtrados %>% 
+      filter(Company == input$marca_cliente)
+  }
+  
+  contagem_genero = dados_filtrados %>%
+    count(Gender)
+  
+  plot_ly(contagem_genero, labels = ~Gender, values = ~n, type = 'pie',
+          marker = list(colors = c('#FF6B6B','#4ECDC4'))) %>%
+    layout(title = 'Distribuição por Gênero')
+})
+```
+
+### Renda vs Preço do Carro
+
+```{r}
+#| fig-height: 5
+
+renderPlotly({
+  dados_filtrados = dados
+    
+  if(input$regiao_cliente != "Todas") {
+    dados_filtrados = dados_filtrados %>% 
+      filter(Dealer_Region == input$regiao_cliente)
+  }
+  
+
+  
+  dados_filtrados = dados_filtrados %>%
+    filter(`Annual Income` >= input$renda_cliente[1] & 
+           `Annual Income` <= input$renda_cliente[2])
+  
+  if(input$marca_cliente != "Todas") {
+    dados_filtrados = dados_filtrados %>% 
+      filter(Company == input$marca_cliente)
+  }
+  
+  plot_ly(dados_filtrados, x = ~`Annual Income`, y = ~Price, 
+          color = ~Gender, colors = c('#FF6B6B', '#4ECDC4'),
+          type = 'scatter', mode = 'markers',
+          text = ~paste("Modelo:", Model, "<br>Marca:", Company),
+          hoverinfo = 'text') %>%
+    layout(title = 'Renda vs Preço do Carro',
+           xaxis = list(title = 'Renda Anual'),
+           yaxis = list(title = 'Preço ($)'))
+})
+```
+
+## Preferências dos Clientes
+
+### Marcas por Gênero
+
+```{r}
+#| fig-height: 5
+
+renderPlotly({
+  dados_filtrados = dados
+    
+  if(input$regiao_cliente != "Todas") {
+    dados_filtrados = dados_filtrados %>% 
+      filter(Dealer_Region == input$regiao_cliente)
+  }
+  
+  dados_filtrados = dados_filtrados %>%
+    filter(`Annual Income` >= input$renda_cliente[1] & 
+           `Annual Income` <= input$renda_cliente[2])
+  
+  if(input$marca_cliente != "Todas") {
+    dados_filtrados = dados_filtrados %>% 
+      filter(Company == input$marca_cliente)
+  }
+  
+  contagem_marca_genero = dados_filtrados %>%
+    count(Company, Gender) %>%
+    group_by(Company) %>%
+    mutate(percentual = n / sum(n) * 100) %>%
+    ungroup()
+  
+  plot_ly(contagem_marca_genero, x = ~Company, y = ~percentual, 
+          color = ~Gender, type = 'bar',
+          colors = c('#FF6B6B', '#4ECDC4')) %>%
+    layout(title = 'Preferência de Marcas por Gênero (%)',
+           xaxis = list(title = 'Marca'),
+           yaxis = list(title = 'Percentual (%)'),
+           barmode = 'stack')
+})
+```

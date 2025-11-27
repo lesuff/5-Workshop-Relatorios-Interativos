@@ -1,0 +1,8 @@
+1 - Este é um arquivo rmd. Para usá-lo, basta rodá-lo no RStudio. 
+
+2 - Coloque a base dos CarData.csv na mesma pasta e exclua o "bases/" do read_csv ou crie uma pasta "bases" para pôr CarData.csv 
+e assim não precisar alterar a leitura da base.
+
+3 - Verifique se tem instaladas todas as bibliotecas que são chamadas no arquivo.
+
+4 - Faça alterações e personalize para treinar.
