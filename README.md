@@ -1,4 +1,4 @@
-# Workshop DataViz LES UFF – Explorando o Tidyverse
+# Workshop DataViz LES UFF – Dashboard no RMarkdown: Relatórios Interativos
 
 <img src="https://github.com/lesuff/1-Workshop-Explorando-o-Tidyverse/blob/main/imagem/dataviz.png" width="100">
 
